@@ -1,0 +1,31 @@
+import Foundation
+
+protocol NowPlayingService: Sendable {
+    func nowPlaying(_ channel: Channel) async throws -> NowPlaying
+}
+
+protocol HTTPClient: Sendable {
+    func get(_ url: URL) async throws -> Data
+}
+
+struct URLSessionHTTPClient: HTTPClient {
+    var session: URLSession = .shared
+
+    func get(_ url: URL) async throws -> Data {
+        var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        let (data, response) = try await session.data(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            throw URLError(.badServerResponse)
+        }
+        return data
+    }
+}
+
+struct RadioCoService: NowPlayingService {
+    var http: any HTTPClient = URLSessionHTTPClient()
+
+    func nowPlaying(_ channel: Channel) async throws -> NowPlaying {
+        try NowPlaying.decode(try await http.get(channel.statusURL), channel: channel)
+    }
+}
