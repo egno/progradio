@@ -8,7 +8,7 @@ cd "$(dirname "$0")/.."
 tap="${TAP:-../homebrew-tap}"
 tap="${tap/#\~/$HOME}"  # make passes ~ unexpanded
 version=$(sed -nE 's/^ *MARKETING_VERSION: "(.*)"/\1/p' project.yml)
-dmg=build/ProgRadio-$version.dmg
+dmg=build/ProgRadioMenuBar-$version.dmg
 [ -f "$dmg" ] || { echo "no $dmg: run make release" >&2; exit 1; }
 sha=$(shasum -a 256 "$dmg" | cut -d' ' -f1)
 
@@ -18,8 +18,8 @@ cask "progradio" do
   version "$version"
   sha256 "$sha"
 
-  url "https://github.com/egno/progradio/releases/download/v#{version}/ProgRadio-#{version}.dmg"
-  name "Prog Radio"
+  url "https://github.com/egno/progradio/releases/download/v#{version}/ProgRadioMenuBar-#{version}.dmg"
+  name "Prog Radio Menu Bar"
   desc "Menu bar player for Prog Radio with widgets and a Control Center control"
   homepage "https://github.com/egno/progradio"
 
@@ -30,11 +30,11 @@ cask "progradio" do
 
   depends_on macos: :tahoe
 
-  app "ProgRadio.app"
+  app "Prog Radio Menu Bar.app"
 
   # Not notarized: clear the quarantine flag so macOS opens it.
   postflight_steps do
-    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/ProgRadio.app"]
+    run "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "{{appdir}}/Prog Radio Menu Bar.app"]
   end
 
   uninstall quit: "io.github.egno.ProgRadio"

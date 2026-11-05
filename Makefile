@@ -1,6 +1,7 @@
 CONFIG ?= Release
 DERIVED := build/DerivedData
-APP := $(DERIVED)/Build/Products/$(CONFIG)/ProgRadio.app
+APP_NAME := Prog Radio Menu Bar
+APP := $(DERIVED)/Build/Products/$(CONFIG)/$(APP_NAME).app
 INSTALL_DIR := $(HOME)/Applications
 
 .PHONY: project build test install run log release cask clean
@@ -17,19 +18,19 @@ test: project
 
 # Widgets are only discovered for apps in an Applications folder.
 install: build
-	-pkill -x ProgRadio; sleep 0.5
+	-pkill -x "$(APP_NAME)"; pkill -x ProgRadio; sleep 0.5
 	mkdir -p $(INSTALL_DIR)
-	rm -rf "$(INSTALL_DIR)/ProgRadio.app"
-	cp -R "$(APP)" "$(INSTALL_DIR)/ProgRadio.app"
-	/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$(INSTALL_DIR)/ProgRadio.app"
-	open "$(INSTALL_DIR)/ProgRadio.app"
+	rm -rf "$(INSTALL_DIR)/ProgRadio.app" "$(INSTALL_DIR)/$(APP_NAME).app"
+	cp -R "$(APP)" "$(INSTALL_DIR)/$(APP_NAME).app"
+	/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$(INSTALL_DIR)/$(APP_NAME).app"
+	open "$(INSTALL_DIR)/$(APP_NAME).app"
 
 run: install
 
 log:
 	log stream --level info --predicate 'subsystem == "io.github.egno.ProgRadio"'
 
-# build/ProgRadio-<version>.dmg and .zip for a GitHub release, see scripts/release.sh.
+# build/ProgRadioMenuBar-<version>.dmg and .zip for a GitHub release, see scripts/release.sh.
 release:
 	scripts/release.sh
 

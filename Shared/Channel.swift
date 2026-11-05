@@ -50,6 +50,11 @@ enum Channel: String, CaseIterable, Identifiable, Codable, Sendable {
         }
     }
 
+    /// HLS stream the station publishes for AirPlay receivers, which handle it better than the raw stream.
+    var airPlayStreamURL: URL {
+        URL(string: "https://stream.progradio.com/hls/\(rawValue)_air.m3u8")!
+    }
+
     var statusURL: URL {
         URL(string: "https://public.radio.co/stations/\(stationID)/status")!
     }

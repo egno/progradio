@@ -7,6 +7,7 @@ struct ProgRadioWidgets: WidgetBundle {
     var body: some Widget {
         ChannelWidget()
         AllChannelsWidget()
+        ShowsWidget()
         PlayChannelControl()
     }
 }

@@ -7,7 +7,7 @@ struct ProgRadioApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuView(player: delegate.player)
+            MenuView(player: delegate.player, notifier: delegate.notifier)
         } label: {
             MenuBarLabel(player: delegate.player)
         }
@@ -18,10 +18,14 @@ struct ProgRadioApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let player = RadioPlayer()
+    let notifier = TrackNotifier()
     private var systemNowPlaying: SystemNowPlaying?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         systemNowPlaying = SystemNowPlaying(player: player)
+        player.onTrackChange = { [notifier] channel, track, artwork in
+            notifier.post(track, channel: channel, artwork: artwork)
+        }
     }
 
     /// `progradio://` links from the widgets and Control Center controls.
@@ -38,7 +42,7 @@ struct MenuBarLabel: View {
     var body: some View {
         switch player.state {
         case .stopped: Image(systemName: "dot.radiowaves.left.and.right")
-        case .buffering: Image(systemName: "antenna.radiowaves.left.and.right")
+        case .buffering, .reconnecting: Image(systemName: "antenna.radiowaves.left.and.right")
         case .playing: Image(systemName: player.channel.symbol)
         }
     }

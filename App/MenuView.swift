@@ -1,8 +1,10 @@
+import AVKit
 import ServiceManagement
 import SwiftUI
 
 struct MenuView: View {
     @Bindable var player: RadioPlayer
+    let notifier: TrackNotifier
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
 
     var body: some View {
@@ -20,7 +22,13 @@ struct MenuView: View {
         }
         .padding(14)
         .frame(width: 320)
-        .task { await player.refreshAll() }
+        .task {
+            // Every channel's track is only fetched while the menu is open.
+            while !Task.isCancelled {
+                await player.refreshAll()
+                try? await Task.sleep(for: RadioPlayer.pollInterval)
+            }
+        }
     }
 
     private var controls: some View {
@@ -39,6 +47,9 @@ struct MenuView: View {
             Image(systemName: "speaker.fill").foregroundStyle(.secondary)
             Slider(value: $player.volume, in: 0...1)
             Image(systemName: "speaker.wave.3.fill").foregroundStyle(.secondary)
+            RoutePicker(player: player.avPlayer)
+                .frame(width: 22, height: 22)
+                .help("Play on AirPlay speakers")
         }
     }
 
@@ -59,29 +70,40 @@ struct MenuView: View {
     }
 
     private var footer: some View {
-        HStack {
-            Toggle("Launch at login", isOn: $launchAtLogin)
-                .toggleStyle(.checkbox)
-                .font(.caption)
-                .onChange(of: launchAtLogin) { _, enabled in
-                    if enabled {
-                        try? SMAppService.mainApp.register()
-                    } else {
-                        try? SMAppService.mainApp.unregister()
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 14) {
+                Toggle("Launch at login", isOn: $launchAtLogin)
+                    .onChange(of: launchAtLogin) { _, enabled in
+                        if enabled {
+                            try? SMAppService.mainApp.register()
+                        } else {
+                            try? SMAppService.mainApp.unregister()
+                        }
+                        launchAtLogin = SMAppService.mainApp.status == .enabled
                     }
-                    launchAtLogin = SMAppService.mainApp.status == .enabled
+                Toggle("Notify new tracks", isOn: Binding(
+                    get: { notifier.isEnabled },
+                    set: { enabled in Task { await notifier.setEnabled(enabled) } }))
+                    .help("Show a notification when a new song starts on the channel you're playing")
+            }
+            .toggleStyle(.checkbox)
+            if notifier.isEnabled, notifier.isBlocked {
+                Button("Notifications are off for Prog Radio Menu Bar in System Settings") {
+                    NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!)
                 }
-            Spacer()
-            Link("progradio.com", destination: URL(string: "https://www.progradio.com")!)
-                .font(.caption)
-            Link("Report a bug", destination: URL(string: "https://github.com/egno/progradio/issues")!)
-                .font(.caption)
-                .help("Open an issue on GitHub")
-            Button("Quit") { NSApp.terminate(nil) }
-                .buttonStyle(.borderless)
-                .font(.caption)
-                .keyboardShortcut("q")
+                .buttonStyle(.link)
+            }
+            HStack {
+                Link("progradio.com", destination: URL(string: "https://www.progradio.com")!)
+                Link("Report a bug", destination: URL(string: "https://github.com/egno/progradio/issues")!)
+                    .help("Open an issue on GitHub")
+                Spacer()
+                Button("Quit") { NSApp.terminate(nil) }
+                    .buttonStyle(.borderless)
+                    .keyboardShortcut("q")
+            }
         }
+        .font(.caption)
     }
 }
 
@@ -97,9 +119,13 @@ private struct NowPlayingCard: View {
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.secondary)
                 if let track = player.current?.track {
-                    Text(track.title)
-                        .font(.headline)
-                        .lineLimit(3)
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(track.title)
+                            .font(.headline)
+                            .lineLimit(3)
+                        Spacer(minLength: 0)
+                        TrackMenu(track: track)
+                    }
                     if !track.artist.isEmpty {
                         Text(track.artist)
                             .font(.subheadline)
@@ -125,8 +151,10 @@ private struct NowPlayingCard: View {
             switch player.state {
             case .stopped: EmptyView()
             case .buffering: Label("Buffering…", systemImage: "hourglass").font(.caption).foregroundStyle(.secondary)
+            case .reconnecting:
+                Label("Reconnecting…", systemImage: "arrow.clockwise").font(.caption).foregroundStyle(.secondary)
             case .playing:
-                Label("Live", systemImage: "waveform")
+                Label(player.usingAirPlayStream ? "Live · AirPlay" : "Live", systemImage: "waveform")
                     .font(.caption)
                     .foregroundStyle(.tint)
                     .symbolEffect(.variableColor.iterative, options: .repeating)
@@ -169,7 +197,7 @@ private struct ChannelRow: View {
                 VStack(alignment: .leading, spacing: 1) {
                     Text(channel.name).fontWeight(isSelected ? .semibold : .regular)
                     if let track = nowPlaying?.track {
-                        Text(track.artist.isEmpty ? track.title : "\(track.artist) – \(track.title)")
+                        Text(track.displayName)
                             .font(.caption)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
@@ -201,8 +229,57 @@ private struct RecentTracks: View {
                     }
                 }
                 .font(.caption)
+                .contextMenu { TrackActions(track: track) }
             }
         }
         .textSelection(.enabled)
+    }
+}
+
+/// Search or copy a track.
+private struct TrackMenu: View {
+    let track: Track
+
+    var body: some View {
+        Menu {
+            TrackActions(track: track)
+        } label: {
+            Image(systemName: "ellipsis.circle")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Find this track")
+    }
+}
+
+private struct TrackActions: View {
+    let track: Track
+
+    var body: some View {
+        ForEach(TrackSearch.allCases) { search in
+            Button("Search \(search.name)") { NSWorkspace.shared.open(search.url(for: track)) }
+        }
+        Divider()
+        Button("Copy “\(track.displayName)”") {
+            NSPasteboard.general.clearContents()
+            NSPasteboard.general.setString(track.displayName, forType: .string)
+        }
+    }
+}
+
+/// The system AirPlay picker, bound to the radio's player.
+private struct RoutePicker: NSViewRepresentable {
+    let player: AVPlayer
+
+    func makeNSView(context: Context) -> AVRoutePickerView {
+        let view = AVRoutePickerView()
+        view.player = player
+        view.isRoutePickerButtonBordered = false
+        return view
+    }
+
+    func updateNSView(_ view: AVRoutePickerView, context: Context) {
+        view.player = player
     }
 }
