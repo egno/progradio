@@ -13,7 +13,7 @@ struct ProgRadioWidgets: WidgetBundle {
 
 struct ChannelWidget: Widget {
     var body: some WidgetConfiguration {
-        AppIntentConfiguration(kind: "local.progradio.channel", intent: SelectChannelIntent.self, provider: ChannelProvider()) { entry in
+        AppIntentConfiguration(kind: "io.github.egno.ProgRadio.channel", intent: SelectChannelIntent.self, provider: ChannelProvider()) { entry in
             ChannelWidgetView(entry: entry)
                 .containerBackground(.background, for: .widget)
         }
@@ -25,7 +25,7 @@ struct ChannelWidget: Widget {
 
 struct AllChannelsWidget: Widget {
     var body: some WidgetConfiguration {
-        StaticConfiguration(kind: "local.progradio.all", provider: AllChannelsProvider()) { entry in
+        StaticConfiguration(kind: "io.github.egno.ProgRadio.all", provider: AllChannelsProvider()) { entry in
             AllChannelsView(entry: entry)
                 .containerBackground(.background, for: .widget)
         }
@@ -38,7 +38,7 @@ struct AllChannelsWidget: Widget {
 /// A Control Center / menu bar control that plays or stops a channel.
 struct PlayChannelControl: ControlWidget {
     var body: some ControlWidgetConfiguration {
-        AppIntentControlConfiguration(kind: "local.progradio.control", intent: SelectChannelControlIntent.self) { configuration in
+        AppIntentControlConfiguration(kind: "io.github.egno.ProgRadio.control", intent: SelectChannelControlIntent.self) { configuration in
             ControlWidgetButton(action: ToggleChannelIntent(channel: configuration.channel)) {
                 Label(configuration.channel.channel.shortName, systemImage: configuration.channel.channel.symbol)
             }

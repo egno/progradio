@@ -3,7 +3,7 @@ DERIVED := build/DerivedData
 APP := $(DERIVED)/Build/Products/$(CONFIG)/ProgRadio.app
 INSTALL_DIR := $(HOME)/Applications
 
-.PHONY: project build test install run log clean
+.PHONY: project build test install run log release cask clean
 
 project:
 	xcodegen generate --quiet
@@ -27,7 +27,15 @@ install: build
 run: install
 
 log:
-	log stream --level info --predicate 'subsystem == "local.progradio"'
+	log stream --level info --predicate 'subsystem == "io.github.egno.ProgRadio"'
+
+# build/ProgRadio-<version>.dmg and .zip for a GitHub release, see scripts/release.sh.
+release:
+	scripts/release.sh
+
+# Casks/progradio.rb in the Homebrew tap for this version's DMG: make cask TAP=~/proj/homebrew-tap
+cask:
+	scripts/cask.sh
 
 clean:
 	rm -rf build ProgRadio.xcodeproj

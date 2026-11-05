@@ -4,7 +4,7 @@ import Observation
 import WidgetKit
 import os
 
-private let log = Logger(subsystem: "local.progradio", category: "player")
+private let log = Logger(subsystem: "io.github.egno.ProgRadio", category: "player")
 
 /// Plays one channel at a time and keeps now-playing info for every channel fresh.
 @MainActor

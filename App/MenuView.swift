@@ -74,6 +74,9 @@ struct MenuView: View {
             Spacer()
             Link("progradio.com", destination: URL(string: "https://www.progradio.com")!)
                 .font(.caption)
+            Link("Report a bug", destination: URL(string: "https://github.com/egno/progradio/issues")!)
+                .font(.caption)
+                .help("Open an issue on GitHub")
             Button("Quit") { NSApp.terminate(nil) }
                 .buttonStyle(.borderless)
                 .font(.caption)
