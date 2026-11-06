@@ -15,6 +15,18 @@ final class NowPlayingTests: XCTestCase {
         XCTAssertEqual(info.history, [Track(artist: "Jethro Tull", title: "Uniform"), Track(artist: "", title: "Untitled")])
     }
 
+    func testHistorySkipsStationBreaks() throws {
+        let json = #"""
+        {"status":"online","current_track":{"title":"Prog Radio - Bronze Buffalo 3"},
+        "history":[{"title":"Prog Radio - Bronze Buffalo 3"},{"title":"Renaissance - On the Frontier"},
+        {"title":"PROG RADIO - Bronze Buffalo 12"},{"title":"King Crimson - Starless"}]}
+        """#
+        let info = try NowPlaying.decode(Data(json.utf8), channel: .wizardsForest)
+        XCTAssertEqual(info.track?.isStationBreak, true)
+        XCTAssertEqual(info.history, [Track(artist: "Renaissance", title: "On the Frontier"),
+                                      Track(artist: "King Crimson", title: "Starless")])
+    }
+
     func testDecodesOfflineStation() throws {
         let info = try NowPlaying.decode(Data(#"{"status":"offline","current_track":null}"#.utf8), channel: .dragonsTower)
         XCTAssertFalse(info.isOnline)

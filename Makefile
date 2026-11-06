@@ -1,6 +1,6 @@
 CONFIG ?= Release
 DERIVED := build/DerivedData
-APP_NAME := Prog Radio Menu Bar
+APP_NAME := Prog Radio Mini
 APP := $(DERIVED)/Build/Products/$(CONFIG)/$(APP_NAME).app
 INSTALL_DIR := $(HOME)/Applications
 
@@ -30,7 +30,7 @@ run: install
 log:
 	log stream --level info --predicate 'subsystem == "io.github.egno.ProgRadio"'
 
-# build/ProgRadioMenuBar-<version>.dmg and .zip for a GitHub release, see scripts/release.sh.
+# build/ProgRadioMini-<version>.dmg and .zip for a GitHub release, see scripts/release.sh.
 release:
 	scripts/release.sh
 

@@ -1,4 +1,4 @@
-# Prog Radio Menu Bar
+# Prog Radio Mini
 
 An unofficial menu bar player for [progradio.com](https://www.progradio.com) with desktop widgets and a Control Center control.
 
@@ -21,13 +21,13 @@ Requires macOS 26 (Tahoe) or later.
 brew install --cask egno/tap/progradio
 ```
 
-Or download `ProgRadioMenuBar-<version>.dmg` from [Releases](https://github.com/egno/progradio/releases) and drag the app to Applications. The app isn't notarized, so macOS blocks the first launch of a downloaded copy; clear the quarantine flag once:
+Or download `ProgRadioMini-<version>.dmg` from [Releases](https://github.com/egno/progradio/releases) and drag the app to Applications. The app isn't notarized, so macOS blocks the first launch of a downloaded copy; clear the quarantine flag once:
 
 ```sh
-xattr -dr com.apple.quarantine "/Applications/Prog Radio Menu Bar.app"
+xattr -dr com.apple.quarantine "/Applications/Prog Radio Mini.app"
 ```
 
-To add widgets: right-click the desktop → Edit Widgets → Prog Radio Menu Bar. To add the control: Control Center → Edit Controls → Prog Radio Menu Bar.
+To add widgets: right-click the desktop → Edit Widgets → Prog Radio Mini. To add the control: Control Center → Edit Controls → Prog Radio Mini.
 
 ## Build
 
@@ -37,7 +37,7 @@ Requires Xcode 26+ and [XcodeGen](https://github.com/yonaskolb/XcodeGen) (`brew 
 make install   # builds Release, copies to ~/Applications, launches
 make test
 make log       # app logs
-make release   # universal build/ProgRadioMenuBar-<version>.dmg and .zip
+make release   # universal build/ProgRadioMini-<version>.dmg and .zip
 make cask TAP=~/proj/homebrew-tap   # Casks/progradio.rb for that DMG
 ```
 
@@ -47,7 +47,7 @@ The app is signed ad hoc. Widgets are refreshed by WidgetKit about every 5 minut
 
 ## Bugs and ideas
 
-Please report them at [github.com/egno/progradio/issues](https://github.com/egno/progradio/issues). The menu bar popover has a **Report a bug** link too.
+Please report them at [github.com/egno/progradio/issues](https://github.com/egno/progradio/issues). You can also choose **Send Feedback…** from the gear menu in the menu bar popover.
 
 ## License
 

@@ -21,6 +21,12 @@ struct Track: Equatable, Sendable {
         self.artist = artist
         self.title = title
     }
+
+    /// Station IDs and promos are tagged with the station itself as the artist,
+    /// e.g. "Prog Radio - Bronze Buffalo 3".
+    var isStationBreak: Bool {
+        artist.caseInsensitiveCompare("Prog Radio") == .orderedSame
+    }
 }
 
 struct NowPlaying: Equatable, Sendable {
@@ -43,8 +49,8 @@ extension NowPlaying {
             track: current.map { Track(radioTitle: $0.title) },
             startedAt: current?.start_time.flatMap(Self.parseDate),
             artworkURL: (current?.artwork_url_large ?? current?.artwork_url).flatMap(URL.init(string:)),
-            // The first history entry is the current track.
-            history: (status.history ?? []).dropFirst().map { Track(radioTitle: $0.title) }
+            // The first history entry is the current track; station breaks aren't songs.
+            history: (status.history ?? []).dropFirst().map { Track(radioTitle: $0.title) }.filter { !$0.isStationBreak }
         )
     }
 

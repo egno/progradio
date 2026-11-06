@@ -342,7 +342,8 @@ final class RadioPlayer {
     }
 
     private func noteHeard(_ track: Track?, on channel: Channel) {
-        guard wantsPlay, channel == self.channel, let track else { return }
+        // Skipping station breaks keeps the last song as heardTrack, so the next song still notifies.
+        guard wantsPlay, channel == self.channel, let track, !track.isStationBreak else { return }
         defer { heardTrack = track }
         guard let heardTrack, heardTrack != track else { return }
         onTrackChange?(channel, track, artwork[channel])

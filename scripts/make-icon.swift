@@ -1,4 +1,4 @@
-// Renders the app icon (Prog Radio's logo from progradio.com, redrawn as vectors) into App/Assets.xcassets/AppIcon.appiconset.
+// Renders the app icon from scripts/icon-source.png into App/Assets.xcassets/AppIcon.appiconset.
 // Run from the repo root: swift scripts/make-icon.swift
 import AppKit
 import CoreGraphics
@@ -7,59 +7,44 @@ import UniformTypeIdentifiers
 
 let canvas: CGFloat = 1024
 
-func color(_ hex: UInt32, _ alpha: CGFloat = 1) -> CGColor {
-    CGColor(srgbRed: CGFloat((hex >> 16) & 0xFF) / 255, green: CGFloat((hex >> 8) & 0xFF) / 255,
-            blue: CGFloat(hex & 0xFF) / 255, alpha: alpha)
-}
+// scripts/icon-source.png: 1254 px artwork, a glowing tile on pure black.
+// Measured edges of its bright border: x 108...1142, y 112...1140 (top-left origin).
+let sourceTile = CGRect(x: 108, y: 112, width: 1034, height: 1028)
+
+// The artwork with its black surround made transparent. Everything reachable from the corners
+// without crossing the bright border is "outside"; its glow keeps its colour, with alpha from its brightness.
+let artwork: CGImage = {
+    let url = URL(fileURLWithPath: "scripts/icon-source.png")
+    let source = CGImageSourceCreateWithURL(url as CFURL, nil).flatMap { CGImageSourceCreateImageAtIndex($0, 0, nil) }!
+    let w = source.width, h = source.height
+    let ctx = CGContext(data: nil, width: w, height: h, bitsPerComponent: 8, bytesPerRow: w * 4,
+                        space: CGColorSpace(name: CGColorSpace.sRGB)!,
+                        bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue)!
+    ctx.draw(source, in: CGRect(x: 0, y: 0, width: w, height: h))
+    let px = ctx.data!.bindMemory(to: UInt8.self, capacity: w * h * 4)
+    func brightness(_ i: Int) -> UInt8 { max(px[i * 4], px[i * 4 + 1], px[i * 4 + 2]) }
+    var outside = [Bool](repeating: false, count: w * h)
+    var stack = [0, w - 1, (h - 1) * w, h * w - 1]
+    while let i = stack.popLast() {
+        if outside[i] || brightness(i) > 200 { continue }
+        outside[i] = true
+        let x = i % w, y = i / w
+        if x > 0 { stack.append(i - 1) }
+        if x < w - 1 { stack.append(i + 1) }
+        if y > 0 { stack.append(i - w) }
+        if y < h - 1 { stack.append(i + w) }
+    }
+    // Premultiplied: keeping RGB and setting alpha to the brightest channel turns black-blended glow into translucent glow.
+    for i in 0..<(w * h) where outside[i] { px[i * 4 + 3] = brightness(i) }
+    return ctx.makeImage()!
+}()
 
 func draw(in ctx: CGContext) {
-    let space = CGColorSpace(name: CGColorSpace.sRGB)!
-    // macOS icon grid: an 824 pt rounded square centred on the 1024 canvas.
-    let tile = CGRect(x: 100, y: 100, width: 824, height: 824)
-    let shape = CGPath(roundedRect: tile, cornerWidth: 185, cornerHeight: 185, transform: nil)
-
-    // Drop shadow under the tile.
-    ctx.saveGState()
-    ctx.setShadow(offset: CGSize(width: 0, height: -12), blur: 28, color: color(0x000000, 0.35))
-    ctx.addPath(shape)
-    ctx.setFillColor(color(0xFFFFFF))
-    ctx.fillPath()
-    ctx.restoreGState()
-
-    // White tile with a barely-there vertical shade, like the logo on progradio.com.
-    ctx.saveGState()
-    ctx.addPath(shape)
-    ctx.clip()
-    let background = CGGradient(colorsSpace: space, colors: [color(0xFFFFFF), color(0xEEF0F3)] as CFArray, locations: [0, 1])!
-    ctx.drawLinearGradient(background, start: CGPoint(x: 512, y: 924), end: CGPoint(x: 512, y: 100), options: [])
-
-    // Prog Radio's logo: a blue dot between two pairs of arcs, cut radially at ±45°.
-    // Proportions measured from the station's 1024 px artwork (outer radius 437.5).
-    let center = CGPoint(x: 512, y: 512)
-    let scale: CGFloat = 0.72
-    let arcs: [(inner: CGFloat, outer: CGFloat)] = [(175.5, 257.5), (336.5, 437.5)]
-    ctx.setFillColor(color(0x333333))
-    for arc in arcs {
-        for side in [0, CGFloat.pi] {
-            let from = side - CGFloat.pi / 4, to = side + CGFloat.pi / 4
-            let path = CGMutablePath()
-            path.addArc(center: center, radius: arc.outer * scale, startAngle: from, endAngle: to, clockwise: false)
-            path.addArc(center: center, radius: arc.inner * scale, startAngle: to, endAngle: from, clockwise: true)
-            path.closeSubpath()
-            ctx.addPath(path)
-            ctx.fillPath()
-        }
-    }
-    let dot: CGFloat = 85 * scale
-    ctx.setFillColor(color(0x0099FF))
-    ctx.fillEllipse(in: CGRect(x: center.x - dot, y: center.y - dot, width: dot * 2, height: dot * 2))
-    ctx.restoreGState()
-
-    // Hairline edge so the white tile doesn't melt into light backgrounds.
-    ctx.addPath(shape)
-    ctx.setStrokeColor(color(0x000000, 0.08))
-    ctx.setLineWidth(2)
-    ctx.strokePath()
+    // macOS icon grid: the tile's border lands on the 824 pt rounded square centred on the 1024 canvas.
+    let scale = 824 / sourceTile.width
+    let size = CGFloat(artwork.width) * scale
+    let tileCenter = CGPoint(x: sourceTile.midX * scale, y: (CGFloat(artwork.height) - sourceTile.midY) * scale)
+    ctx.draw(artwork, in: CGRect(x: 512 - tileCenter.x, y: 512 - tileCenter.y, width: size, height: size))
 }
 
 func render(_ pixels: Int) -> CGImage {

@@ -6,6 +6,7 @@ struct MenuView: View {
     @Bindable var player: RadioPlayer
     let notifier: TrackNotifier
     @State private var launchAtLogin = SMAppService.mainApp.status == .enabled
+    @AppStorage("showRecentTracks") private var showRecentTracks = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -15,7 +16,12 @@ struct MenuView: View {
             channels
             if let history = player.current?.history, !history.isEmpty {
                 Divider()
-                RecentTracks(tracks: Array(history.prefix(5)))
+                VStack(alignment: .leading, spacing: 3) {
+                    SectionToggle(title: "Recently played", detail: "on \(player.channel.shortName)", isExpanded: $showRecentTracks)
+                    if showRecentTracks {
+                        RecentTracks(tracks: Array(history.prefix(5)))
+                    }
+                }
             }
             Divider()
             footer
@@ -71,39 +77,95 @@ struct MenuView: View {
 
     private var footer: some View {
         VStack(alignment: .leading, spacing: 8) {
-            HStack(spacing: 14) {
-                Toggle("Launch at login", isOn: $launchAtLogin)
-                    .onChange(of: launchAtLogin) { _, enabled in
-                        if enabled {
-                            try? SMAppService.mainApp.register()
-                        } else {
-                            try? SMAppService.mainApp.unregister()
-                        }
-                        launchAtLogin = SMAppService.mainApp.status == .enabled
-                    }
-                Toggle("Notify new tracks", isOn: Binding(
-                    get: { notifier.isEnabled },
-                    set: { enabled in Task { await notifier.setEnabled(enabled) } }))
-                    .help("Show a notification when a new song starts on the channel you're playing")
-            }
-            .toggleStyle(.checkbox)
             if notifier.isEnabled, notifier.isBlocked {
-                Button("Notifications are off for Prog Radio Menu Bar in System Settings") {
+                Button("Notifications are off for Prog Radio Mini in System Settings") {
                     NSWorkspace.shared.open(URL(string: "x-apple.systempreferences:com.apple.Notifications-Settings.extension")!)
                 }
                 .buttonStyle(.link)
             }
             HStack {
-                Link("progradio.com", destination: URL(string: "https://www.progradio.com")!)
-                Link("Report a bug", destination: URL(string: "https://github.com/egno/progradio/issues")!)
-                    .help("Open an issue on GitHub")
                 Spacer()
+                settingsMenu
                 Button("Quit") { NSApp.terminate(nil) }
                     .buttonStyle(.borderless)
                     .keyboardShortcut("q")
             }
         }
         .font(.caption)
+    }
+
+    /// Set-once options and links, kept out of the way in a gear menu.
+    private var settingsMenu: some View {
+        Menu {
+            Toggle("Launch at login", isOn: Binding(
+                get: { launchAtLogin },
+                set: { enabled in
+                    if enabled {
+                        try? SMAppService.mainApp.register()
+                    } else {
+                        try? SMAppService.mainApp.unregister()
+                    }
+                    launchAtLogin = SMAppService.mainApp.status == .enabled
+                }))
+            Toggle("Notify new tracks", isOn: Binding(
+                get: { notifier.isEnabled },
+                set: { enabled in Task { await notifier.setEnabled(enabled) } }))
+            Divider()
+            Button("Send Feedback…") { NSWorkspace.shared.open(URL(string: "https://github.com/egno/progradio/issues")!) }
+        } label: {
+            Image(systemName: "gearshape")
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .help("Settings")
+    }
+}
+
+/// The station name in the now-playing card, linking to progradio.com.
+private struct StationLink: View {
+    let channel: Channel
+    @State private var hovering = false
+
+    var body: some View {
+        Link(destination: URL(string: "https://www.progradio.com")!) {
+            Label(channel.name, systemImage: channel.symbol)
+                .underline(hovering)
+        }
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.secondary)
+        .pointerStyle(.link)
+        .onHover { hovering = $0 }
+        .help("Open progradio.com")
+    }
+}
+
+/// A caption header that shows or hides the section below it.
+private struct SectionToggle: View {
+    let title: String
+    var detail: String?
+    @Binding var isExpanded: Bool
+
+    var body: some View {
+        Button {
+            withAnimation(.snappy(duration: 0.2)) { isExpanded.toggle() }
+        } label: {
+            HStack(spacing: 4) {
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .rotationEffect(.degrees(isExpanded ? 90 : 0))
+                Text(title)
+                if let detail {
+                    Text(detail).foregroundStyle(.tertiary)
+                }
+                Spacer()
+            }
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help(isExpanded ? "Hide \(title.lowercased())" : "Show \(title.lowercased())")
     }
 }
 
@@ -112,26 +174,12 @@ private struct NowPlayingCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            Artwork(image: player.currentArtwork, channel: player.channel)
+            ArtworkLink(image: player.currentArtwork, channel: player.channel, track: player.current?.track)
                 .frame(width: 96, height: 96)
             VStack(alignment: .leading, spacing: 4) {
-                Label(player.channel.name, systemImage: player.channel.symbol)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                StationLink(channel: player.channel)
                 if let track = player.current?.track {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(track.title)
-                            .font(.headline)
-                            .lineLimit(3)
-                        Spacer(minLength: 0)
-                        TrackMenu(track: track)
-                    }
-                    if !track.artist.isEmpty {
-                        Text(track.artist)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
+                    TrackTitle(track: track)
                 } else if player.current?.isOnline == false {
                     Text("Channel offline").foregroundStyle(.secondary)
                 } else {
@@ -180,6 +228,50 @@ struct Artwork: View {
     }
 }
 
+/// Artwork that opens the artist in progradio.com's Rabbit Hole DB.
+private struct ArtworkLink: View {
+    let image: NSImage?
+    let channel: Channel
+    let track: Track?
+    @State private var hovering = false
+    @State private var lookup: Task<Void, Never>?
+
+    private var artist: String? {
+        guard let track, !track.artist.isEmpty, !track.isStationBreak else { return nil }
+        return track.artist
+    }
+
+    var body: some View {
+        if let artist, let track {
+            Button { open(track) } label: {
+                Artwork(image: image, channel: channel)
+                    .overlay {
+                        if lookup != nil {
+                            ProgressView().controlSize(.small)
+                        }
+                    }
+                    .opacity(hovering ? 0.8 : 1)
+            }
+            .buttonStyle(.plain)
+            .onHover { hovering = $0 }
+            .help("Explore \(artist) in the Rabbit Hole DB")
+            .onChange(of: track) { lookup?.cancel(); lookup = nil }
+        } else {
+            Artwork(image: image, channel: channel)
+        }
+    }
+
+    private func open(_ track: Track) {
+        guard lookup == nil else { return }
+        lookup = Task {
+            let id = await MusicBrainzLookup().artistMBID(for: track)
+            guard !Task.isCancelled else { return }
+            NSWorkspace.shared.open(id.map(RabbitHole.url(artistMBID:)) ?? RabbitHole.home)
+            lookup = nil
+        }
+    }
+}
+
 private struct ChannelRow: View {
     let channel: Channel
     let nowPlaying: NowPlaying?
@@ -191,11 +283,13 @@ private struct ChannelRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: isPlaying ? "speaker.wave.2.fill" : channel.symbol)
+                Image(systemName: channel.symbol)
                     .frame(width: 18)
                     .foregroundStyle(isSelected ? AnyShapeStyle(.tint) : AnyShapeStyle(.secondary))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(channel.name).fontWeight(isSelected ? .semibold : .regular)
+                    Text(channel.name)
+                        .fontWeight(isSelected ? .semibold : .regular)
+                        .foregroundStyle(isPlaying ? AnyShapeStyle(.tint) : AnyShapeStyle(.primary))
                     if let track = nowPlaying?.track {
                         Text(track.displayName)
                             .font(.caption)
@@ -204,6 +298,12 @@ private struct ChannelRow: View {
                     }
                 }
                 Spacer()
+                if isPlaying {
+                    Image(systemName: "waveform")
+                        .foregroundStyle(.tint)
+                        .symbolEffect(.variableColor.iterative, options: .repeating)
+                        .help("Playing")
+                }
             }
             .padding(.vertical, 4)
             .padding(.horizontal, 6)
@@ -220,7 +320,6 @@ private struct RecentTracks: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text("Recently played").font(.caption).foregroundStyle(.secondary)
             ForEach(Array(tracks.enumerated()), id: \.offset) { _, track in
                 HStack(spacing: 4) {
                     Text(track.title).lineLimit(1)
@@ -236,21 +335,76 @@ private struct RecentTracks: View {
     }
 }
 
-/// Search or copy a track.
-private struct TrackMenu: View {
+/// The song and artist; a click pops up the search menu.
+private struct TrackTitle: View {
     let track: Track
+    @State private var hovering = false
 
     var body: some View {
-        Menu {
-            TrackActions(track: track)
+        Button {
+            TrackActionMenu(track: track).popUpAtMouse()
         } label: {
-            Image(systemName: "ellipsis.circle")
+            VStack(alignment: .leading, spacing: 4) {
+                Text(track.title)
+                    .font(.headline)
+                    .lineLimit(3)
+                if !track.artist.isEmpty {
+                    Text(track.artist)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+            }
+            .underline(hovering, color: .secondary)
+            .multilineTextAlignment(.leading)
+            .contentShape(Rectangle())
         }
-        .menuStyle(.borderlessButton)
-        .menuIndicator(.hidden)
-        .fixedSize()
+        .buttonStyle(.plain)
+        .onHover { hovering = $0 }
         .help("Find this track")
     }
+}
+
+/// `TrackActions` as an AppKit menu, for popping up from an arbitrary view.
+@MainActor
+private final class TrackActionMenu: NSObject {
+    private let track: Track
+    private let menu = NSMenu()
+
+    init(track: Track) {
+        self.track = track
+        super.init()
+        for search in TrackSearch.allCases {
+            add("Search \(search.name)", tag: TrackSearch.allCases.firstIndex(of: search)!)
+        }
+        menu.addItem(.separator())
+        add("Copy “\(track.displayName)”", tag: -1)
+    }
+
+    private func add(_ title: String, tag: Int) {
+        let item = NSMenuItem(title: title, action: #selector(choose(_:)), keyEquivalent: "")
+        item.target = self
+        item.tag = tag
+        menu.addItem(item)
+    }
+
+    /// Blocks until the menu closes, which keeps `self` alive as the items' target.
+    func popUpAtMouse() {
+        menu.popUp(positioning: nil, at: NSEvent.mouseLocation, in: nil)
+    }
+
+    @objc private func choose(_ item: NSMenuItem) {
+        if TrackSearch.allCases.indices.contains(item.tag) {
+            NSWorkspace.shared.open(TrackSearch.allCases[item.tag].url(for: track))
+        } else {
+            copyToPasteboard(track)
+        }
+    }
+}
+
+private func copyToPasteboard(_ track: Track) {
+    NSPasteboard.general.clearContents()
+    NSPasteboard.general.setString(track.displayName, forType: .string)
 }
 
 private struct TrackActions: View {
@@ -261,10 +415,7 @@ private struct TrackActions: View {
             Button("Search \(search.name)") { NSWorkspace.shared.open(search.url(for: track)) }
         }
         Divider()
-        Button("Copy “\(track.displayName)”") {
-            NSPasteboard.general.clearContents()
-            NSPasteboard.general.setString(track.displayName, forType: .string)
-        }
+        Button("Copy “\(track.displayName)”") { copyToPasteboard(track) }
     }
 }
 

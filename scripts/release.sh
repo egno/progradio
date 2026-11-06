@@ -1,5 +1,5 @@
 #!/bin/bash
-# Builds build/ProgRadioMenuBar-<version>.dmg and .zip for a GitHub release: a universal (arm64 + x86_64) app, signed ad hoc.
+# Builds build/ProgRadioMini-<version>.dmg and .zip for a GitHub release: a universal (arm64 + x86_64) app, signed ad hoc.
 # Not notarized: the Homebrew cask clears the quarantine flag; DMG users do it once (see README).
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -11,17 +11,17 @@ xcodebuild -project ProgRadio.xcodeproj -scheme ProgRadio -configuration Release
     -derivedDataPath build/release/DerivedData -destination 'generic/platform=macOS' \
     ARCHS='arm64 x86_64' ONLY_ACTIVE_ARCH=NO -quiet build
 
-name="Prog Radio Menu Bar"
+name="Prog Radio Mini"
 app="build/release/$name.app"
 cp -R "build/release/DerivedData/Build/Products/Release/$name.app" "$app"
 codesign --verify --deep --strict "$app"
 
-zip=build/ProgRadioMenuBar-$version.zip
+zip=build/ProgRadioMini-$version.zip
 rm -f "$zip"
 ditto -c -k --keepParent "$app" "$zip"
 
 # The disk image: the app next to a link to /Applications, to drag it onto.
-dmg=build/ProgRadioMenuBar-$version.dmg
+dmg=build/ProgRadioMini-$version.dmg
 stage=build/release/dmg
 mkdir -p "$stage"
 cp -R "$app" "$stage/"

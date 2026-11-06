@@ -11,9 +11,16 @@ protocol HTTPClient: Sendable {
 struct URLSessionHTTPClient: HTTPClient {
     var session: URLSession = .shared
 
+    static let userAgent: String = {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1"
+        return "ProgRadioMini/\(version) (https://github.com/egno/progradio)"
+    }()
+
     func get(_ url: URL) async throws -> Data {
         var request = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: 15)
         request.setValue("application/json", forHTTPHeaderField: "Accept")
+        // MusicBrainz rejects requests without an identifying User-Agent.
+        request.setValue(Self.userAgent, forHTTPHeaderField: "User-Agent")
         let (data, response) = try await session.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
             throw URLError(.badServerResponse)
