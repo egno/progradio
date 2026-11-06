@@ -17,6 +17,8 @@ final class RadioPlayer {
     private(set) var state: State = .stopped
     private(set) var nowPlaying: [Channel: NowPlaying] = [:]
     private(set) var artwork: [Channel: NSImage] = [:]
+    /// Album year, artist country and MusicBrainz id, looked up for the selected channel only.
+    private(set) var details: [Channel: TrackDetails] = [:]
     private(set) var lastError: String?
     /// Playing the station's AirPlay HLS stream because the audio goes to an AirPlay receiver.
     private(set) var usingAirPlayStream = false
@@ -30,6 +32,10 @@ final class RadioPlayer {
 
     var current: NowPlaying? { nowPlaying[channel] }
     var currentArtwork: NSImage? { artwork[channel] }
+    var currentDetails: TrackDetails? {
+        guard let details = details[channel], details.track == current?.track else { return nil }
+        return details
+    }
     var isActive: Bool { state != .stopped }
     /// For the AirPlay route picker.
     var avPlayer: AVPlayer { player }
@@ -55,6 +61,8 @@ final class RadioPlayer {
     @ObservationIgnored private var itemStatusObservation: NSKeyValueObservation?
     @ObservationIgnored private var heardTrack: Track?
     @ObservationIgnored private var networkUp = true
+    @ObservationIgnored private var detailsInFlight: [Channel: Track] = [:]
+    @ObservationIgnored private let musicBrainz = MusicBrainzLookup()
     private var artworkURLs: [Channel: URL] = [:]
 
     private enum Keys {
@@ -125,6 +133,7 @@ final class RadioPlayer {
     private func setChannel(_ channel: Channel) {
         self.channel = channel
         defaults.set(channel.rawValue, forKey: Keys.channel)
+        loadDetails(channel)
     }
 
     func step(_ offset: Int) {
@@ -331,6 +340,7 @@ final class RadioPlayer {
             let trackChanged = nowPlaying[channel]?.track != info.track
             nowPlaying[channel] = info
             if info.artworkURL != artworkURLs[channel] { await loadArtwork(channel, url: info.artworkURL) }
+            if channel == self.channel { loadDetails(channel) }
             if trackChanged {
                 if channel == self.channel { changed() }
                 WidgetCenter.shared.reloadAllTimelines()
@@ -359,6 +369,19 @@ final class RadioPlayer {
         guard artworkURLs[channel] == url else { return }
         artwork[channel] = image
         if channel == self.channel { changed() }
+    }
+
+    /// One MusicBrainz lookup per track; a miss is remembered too, so polling doesn't repeat it.
+    private func loadDetails(_ channel: Channel) {
+        guard let info = nowPlaying[channel], let track = info.track, !track.artist.isEmpty, !track.isStationBreak,
+              details[channel]?.track != track, detailsInFlight[channel] != track else { return }
+        detailsInFlight[channel] = track
+        Task {
+            let found = await musicBrainz.details(for: track, album: info.album)
+            if detailsInFlight[channel] == track { detailsInFlight[channel] = nil }
+            guard nowPlaying[channel]?.track == track else { return }
+            details[channel] = found ?? TrackDetails(track: track)
+        }
     }
 
     private func changed() { onChange?() }

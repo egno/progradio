@@ -174,12 +174,14 @@ private struct NowPlayingCard: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 12) {
-            ArtworkLink(image: player.currentArtwork, channel: player.channel, track: player.current?.track)
+            ArtworkLink(image: player.currentArtwork, channel: player.channel, track: player.current?.track,
+                        knownArtistMBID: player.currentDetails?.artistMBID)
                 .frame(width: 96, height: 96)
             VStack(alignment: .leading, spacing: 4) {
                 StationLink(channel: player.channel)
                 if let track = player.current?.track {
                     TrackTitle(track: track)
+                    TrackFacts(album: player.current?.album, details: player.currentDetails)
                 } else if player.current?.isOnline == false {
                     Text("Channel offline").foregroundStyle(.secondary)
                 } else {
@@ -233,6 +235,8 @@ private struct ArtworkLink: View {
     let image: NSImage?
     let channel: Channel
     let track: Track?
+    /// Already found by the player's MusicBrainz lookup; saves a search on click.
+    let knownArtistMBID: String?
     @State private var hovering = false
     @State private var lookup: Task<Void, Never>?
 
@@ -262,6 +266,10 @@ private struct ArtworkLink: View {
     }
 
     private func open(_ track: Track) {
+        if let knownArtistMBID {
+            NSWorkspace.shared.open(RabbitHole.url(artistMBID: knownArtistMBID))
+            return
+        }
         guard lookup == nil else { return }
         lookup = Task {
             let id = await MusicBrainzLookup().artistMBID(for: track)
@@ -332,6 +340,31 @@ private struct RecentTracks: View {
             }
         }
         .textSelection(.enabled)
+    }
+}
+
+/// "The Six Wives of Henry VIII · 1973 · 🇬🇧 United Kingdom", with whatever parts are known.
+private struct TrackFacts: View {
+    let album: String?
+    let details: TrackDetails?
+
+    private var line: String? {
+        var parts: [String] = []
+        if let album { parts.append(album) }
+        if let year = details?.year { parts.append(year) }
+        if let country = details?.countryName {
+            parts.append([details?.countryFlag, country].compactMap { $0 }.joined(separator: " "))
+        }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    var body: some View {
+        if let line {
+            Text(line)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+        }
     }
 }
 

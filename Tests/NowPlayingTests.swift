@@ -41,8 +41,19 @@ final class NowPlayingTests: XCTestCase {
     func testServiceUsesStationStatusURL() async throws {
         let http = FakeHTTP(body: #"{"status":"online","current_track":{"title":"A - B"}}"#)
         let info = try await RadioCoService(http: http).nowPlaying(.wizardsForest)
-        XCTAssertEqual(http.requested, [URL(string: "https://public.radio.co/stations/s95a101d27/status")!])
+        XCTAssertEqual(Set(http.requested), [URL(string: "https://public.radio.co/stations/s95a101d27/status")!,
+                                             URL(string: "https://public.radio.co/api/v2/s95a101d27/track/current")!])
         XCTAssertEqual(info.track, Track(artist: "A", title: "B"))
+        XCTAssertNil(info.album, "the status body isn't a v2 payload, so the album is just left out")
+    }
+
+    func testDecodesAlbumForTheSameTrack() throws {
+        let json = #"{"data":{"title":"Rick Wakeman - Catherine Parr","track_album":"The Six Wives Of Henry VIII"}}"#
+        let track = Track(artist: "Rick Wakeman", title: "Catherine Parr")
+        XCTAssertEqual(try NowPlaying.decodeAlbum(Data(json.utf8), track: track), "The Six Wives Of Henry VIII")
+        XCTAssertNil(try NowPlaying.decodeAlbum(Data(json.utf8), track: Track(artist: "Yes", title: "Roundabout")))
+        XCTAssertNil(try NowPlaying.decodeAlbum(Data(#"{"data":{"title":"A - B","track_album":" "}}"#.utf8),
+                                                track: Track(artist: "A", title: "B")))
     }
 
     func testAppLinkRoundTrips() {
@@ -55,10 +66,12 @@ final class NowPlayingTests: XCTestCase {
 
 private final class FakeHTTP: HTTPClient, @unchecked Sendable {
     let body: String
-    private(set) var requested: [URL] = []
+    private let lock = NSLock()
+    private var _requested: [URL] = []
+    var requested: [URL] { lock.withLock { _requested } }
     init(body: String) { self.body = body }
     func get(_ url: URL) async throws -> Data {
-        requested.append(url)
+        lock.withLock { _requested.append(url) }
         return Data(body.utf8)
     }
 }

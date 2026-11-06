@@ -36,6 +36,8 @@ struct NowPlaying: Equatable, Sendable {
     let startedAt: Date?
     let artworkURL: URL?
     let history: [Track]
+    /// From radio.co's v2 API; the status payload doesn't carry it.
+    var album: String? = nil
 }
 
 extension NowPlaying {
@@ -52,6 +54,15 @@ extension NowPlaying {
             // The first history entry is the current track; station breaks aren't songs.
             history: (status.history ?? []).dropFirst().map { Track(radioTitle: $0.title) }.filter { !$0.isStationBreak }
         )
+    }
+
+    /// The album from radio.co's v2 `/{station}/track/current`, if it describes `track` (the two endpoints can
+    /// disagree for a moment when a track changes).
+    static func decodeAlbum(_ data: Data, track: Track?) throws -> String? {
+        let current = try JSONDecoder().decode(CurrentTrackDTO.self, from: data).data
+        guard let track, current.title.map(Track.init(radioTitle:)) == track, let album = current.track_album?.trimmingCharacters(in: .whitespaces),
+              !album.isEmpty else { return nil }
+        return album
     }
 
     private static func parseDate(_ string: String) -> Date? {
@@ -71,4 +82,12 @@ private struct StatusDTO: Decodable {
     let status: String
     let current_track: TrackDTO?
     let history: [HistoryDTO]?
+}
+
+private struct CurrentTrackDTO: Decodable {
+    struct TrackDTO: Decodable {
+        let title: String?
+        let track_album: String?
+    }
+    let data: TrackDTO
 }

@@ -58,4 +58,9 @@ enum Channel: String, CaseIterable, Identifiable, Codable, Sendable {
     var statusURL: URL {
         URL(string: "https://public.radio.co/stations/\(stationID)/status")!
     }
+
+    /// radio.co's v2 current track, which adds the album.
+    var currentTrackURL: URL {
+        URL(string: "https://public.radio.co/api/v2/\(stationID)/track/current")!
+    }
 }

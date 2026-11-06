@@ -33,6 +33,13 @@ struct RadioCoService: NowPlayingService {
     var http: any HTTPClient = URLSessionHTTPClient()
 
     func nowPlaying(_ channel: Channel) async throws -> NowPlaying {
-        try NowPlaying.decode(try await http.get(channel.statusURL), channel: channel)
+        async let album = http.get(channel.currentTrackURL)
+        let status = try await http.get(channel.statusURL)
+        var info = try NowPlaying.decode(status, channel: channel)
+        // The album is a nicety: a failed request leaves it out rather than failing the update.
+        if let data = try? await album {
+            info.album = try? NowPlaying.decodeAlbum(data, track: info.track)
+        }
+        return info
     }
 }
