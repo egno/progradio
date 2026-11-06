@@ -7,7 +7,7 @@ struct ProgRadioApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuView(player: delegate.player, notifier: delegate.notifier)
+            MenuView(player: delegate.player, notifier: delegate.notifier, votes: delegate.votes)
         } label: {
             MenuBarLabel(player: delegate.player)
         }
@@ -19,6 +19,7 @@ struct ProgRadioApp: App {
 final class AppDelegate: NSObject, NSApplicationDelegate {
     let player = RadioPlayer()
     let notifier = TrackNotifier()
+    let votes = SongVotes()
     private var systemNowPlaying: SystemNowPlaying?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
