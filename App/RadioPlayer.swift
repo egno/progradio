@@ -61,9 +61,16 @@ final class RadioPlayer {
     @ObservationIgnored private var itemStatusObservation: NSKeyValueObservation?
     @ObservationIgnored private var heardTrack: Track?
     @ObservationIgnored private var networkUp = true
-    @ObservationIgnored private var detailsInFlight: [Channel: Track] = [:]
+    @ObservationIgnored private var detailsInFlight: [Channel: DetailsLookup] = [:]
+    /// What the stored details were looked up with, so a late album gets its own lookup.
+    @ObservationIgnored private var detailsLookedUp: [Channel: DetailsLookup] = [:]
     @ObservationIgnored private let musicBrainz = MusicBrainzLookup()
     private var artworkURLs: [Channel: URL] = [:]
+
+    private struct DetailsLookup: Equatable {
+        let track: Track
+        let album: String?
+    }
 
     private enum Keys {
         static let channel = "channel"
@@ -336,7 +343,9 @@ final class RadioPlayer {
 
     func refresh(_ channel: Channel) async {
         do {
-            let info = try await service.nowPlaying(channel)
+            var info = try await service.nowPlaying(channel)
+            // The album comes from a second request that can fail or lag; don't forget one we already have.
+            if info.album == nil, let known = nowPlaying[channel], known.track == info.track { info.album = known.album }
             let trackChanged = nowPlaying[channel]?.track != info.track
             nowPlaying[channel] = info
             if info.artworkURL != artworkURLs[channel] { await loadArtwork(channel, url: info.artworkURL) }
@@ -371,16 +380,27 @@ final class RadioPlayer {
         if channel == self.channel { changed() }
     }
 
-    /// One MusicBrainz lookup per track; a miss is remembered too, so polling doesn't repeat it.
+    /// One MusicBrainz lookup per track and album; a miss is remembered too, so polling doesn't repeat it.
+    /// The album often arrives a poll after the track, and the year can only be found with it, so that
+    /// gets a second lookup.
     private func loadDetails(_ channel: Channel) {
-        guard let info = nowPlaying[channel], let track = info.track, !track.artist.isEmpty, !track.isStationBreak,
-              details[channel]?.track != track, detailsInFlight[channel] != track else { return }
-        detailsInFlight[channel] = track
+        guard let info = nowPlaying[channel], let track = info.track, !track.artist.isEmpty, !track.isStationBreak else { return }
+        let lookup = DetailsLookup(track: track, album: info.album)
+        guard detailsLookedUp[channel] != lookup, detailsInFlight[channel] != lookup else { return }
+        detailsInFlight[channel] = lookup
         Task {
-            let found = await musicBrainz.details(for: track, album: info.album)
-            if detailsInFlight[channel] == track { detailsInFlight[channel] = nil }
-            guard nowPlaying[channel]?.track == track else { return }
-            details[channel] = found ?? TrackDetails(track: track)
+            let found = await musicBrainz.details(for: track, album: lookup.album)
+            if detailsInFlight[channel] == lookup { detailsInFlight[channel] = nil }
+            guard let now = nowPlaying[channel], now.track == track, now.album == lookup.album else { return }
+            var merged = found ?? TrackDetails(track: track)
+            // Keep what an earlier lookup for this track found if this one came back with less.
+            if let earlier = details[channel], earlier.track == track {
+                merged.artistMBID = merged.artistMBID ?? earlier.artistMBID
+                merged.year = merged.year ?? earlier.year
+                merged.countryCode = merged.countryCode ?? earlier.countryCode
+            }
+            detailsLookedUp[channel] = lookup
+            details[channel] = merged
         }
     }
 
