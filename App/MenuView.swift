@@ -108,6 +108,12 @@ struct MenuView: View {
         }
     }
 
+    /// "Version 1.3.1", from the bundle.
+    private static let versionTitle: String = {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String
+        return version.map { "Version \($0)" } ?? "Releases"
+    }()
+
     /// Set-once options and links, kept out of the way in a gear menu.
     private var settingsMenu: some View {
         Menu {
@@ -127,6 +133,8 @@ struct MenuView: View {
             Toggle("Channel colors", isOn: $channelColors)
             Divider()
             Button("Send Feedback…") { NSWorkspace.shared.open(URL(string: "https://github.com/egno/progradio/issues")!) }
+            Button(Self.versionTitle) { NSWorkspace.shared.open(URL(string: "https://github.com/egno/progradio/releases")!) }
+                .help("See the release notes")
             Divider()
             Button("Quit Prog Radio Mini") { NSApp.terminate(nil) }
                 .keyboardShortcut("q")
